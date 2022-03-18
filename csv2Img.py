@@ -7,32 +7,24 @@ if __name__ == "__main__":
   s = csvFile.readline()
 
   #读取csv到np矩阵
-  img = np.ndarray((8000,6144),dtype=np.float32)
+  img = np.ndarray((8000,2048),dtype=np.float32)
   for i in range(0,8000):
     arr = s.split(",")
     arr = arr[2:]
-    img[i] = arr
+    img[i] = arr[1::3]
     s = csvFile.readline()
+  
+  #将深度钳制到有文字的范围
+  img[img == 0] = np.nan
+  Up, Down = 0.65, 0.3
+  max = np.nanmax(img)
+  min = np.nanmin(img)
+  D = max - min
+  max = min + D * Up
+  min = min + D * Down
+  img = ((img - min) / (max - min))*255
+  img[np.isnan(img)] = 0
 
-  #获取csc的最大值和最小值并生成图像
-  def to8BitImg(img:np.ndarray):
-    img[img == 0] = np.nan
-    #规格化成8位图像
-    imgMin = np.nanmin(img)
-    imgMax = np.nanmax(img)
-    img[np.isnan(img)] = 0.0
-    img = ((img - imgMin) / (imgMax - imgMin))*255
-    img = np.clip(img,0,255)
-    img = img.astype(np.uint8)
-    return img
-
-  #生成图像
-  imgW = to8BitImg(img[:,::3,np.newaxis])
-  imgH = to8BitImg(img[:,1::3,np.newaxis])
-  imgM = to8BitImg(img[:,2::3,np.newaxis])
-
-  #合并并保存
-  img = np.concatenate((imgW,imgH,imgM),2)
-
+  img = np.clip(img,0,255).astype(np.uint8)
   cv2.imwrite("data/ProfileData00.png",img)
     
