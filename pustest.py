@@ -1,1 +1,1 @@
-print("pushtest")
+print("push")
