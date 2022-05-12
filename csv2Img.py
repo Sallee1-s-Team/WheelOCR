@@ -4,49 +4,61 @@ import torch
 from matplotlib import pyplot
 
 
+import os,sys
+os.chdir(sys.path[0])
+
 class vertexCloudImg:
   def __init__(self, path: str) -> None:
     self.path = path
     self.img: np.ndarray
-    self.__loadImg(path)  # 点云转二维数组
-    self.__normalizeImg(1000)  # 规格化，参数为直方图中忽略的亮度阈值
-    self.__Cut(7500)  # 裁剪，参数为有效像素的个数
+    self.__loadImg(path)        # 点云转二维数组
+    self.__Cut(7500)            # 裁剪，参数为有效像素的个数
     while(np.count_nonzero(self.img) != np.size(self.img)):
-      self.__fullHole(2)  # 使用加权均值模糊反复填洞，直到洞被填满
-    self.img = self.img.astype("float32")
+      self.__fullHole(2)        # 使用加权均值模糊反复填洞，直到洞被填满
+    self.__flatImg(100)         # 使用扫描线均值消除曲率
+    self.__normalizeImg(100000)
+    # 转换为SDR图像
+    #self.img = self.img ** 3   #伽马值调整
+    self.img = (self.img * 255).astype("uint8")
+    self.img = np.repeat(self.img[:,:,np.newaxis],3,2)
+    # 滤波
+    self.img = cv2.pyrMeanShiftFiltering(self.img,10,10)
+    # 直方图均衡化
+    self.img = cv2.equalizeHist(self.img[:,:,0])
+    
 
   def __normalizeImg(self, thre: int):
-    # #移除无效点后规格化到0~1
-    # self.img = np.where(self.img == 0, np.nan, self.img)
-    # minH = np.nanmin(self.img)
-    # maxH = np.nanmax(self.img)
-    # self.img = np.nan_to_num(self.img)
-    # self.img = (self.img - minH)/(maxH-minH)
+    #移除无效点后规格化到0~1
+    self.img = np.where(self.img == 0, np.nan, self.img)
+    minH = np.nanmin(self.img)
+    maxH = np.nanmax(self.img)
+    self.img = np.nan_to_num(self.img)
+    self.img = (self.img - minH)/(maxH-minH)
+    if(thre != 0):
+      #像素统计
+      hist = np.histogram(self.img, bins=np.arange(0, 1.01, 0.01, dtype=np.float))
 
-    #像素统计
-    hist = np.histogram(self.img, bins=np.arange(0, 1.01, 0.01, dtype=np.float))
+      #基于直方图和给定阈值重新规格化图像(移除两侧的无效点)
+      minH = 0.0
+      maxH = 1.0
+      maxLen = 0
 
-    #基于直方图和给定阈值重新规格化图像(移除两侧的无效点)
-    minH = 0.0
-    maxH = 1.0
-    maxLen = 0
-
-    minH0 = 0
-    maxH0 = 100
-    inH = False
-    for i in range(len(hist[0])):
-      if(hist[0][i] >= thre):
-        if(inH == False):
-          minH0 = i
-        inH = True
-      elif(inH == True):
-        maxH0 = i
-        inH = False
-        if(maxH0 - minH0 > maxLen):
-          maxLen = maxH0-minH0
-          minH = minH0/100
-          maxH = maxH0/100
-    self.img = np.clip((self.img - minH)/(maxH-minH), 0.0, 1.0)
+      minH0 = 0
+      maxH0 = 100
+      inH = False
+      for i in range(len(hist[0])):
+        if(hist[0][i] >= thre):
+          if(inH == False):
+            minH0 = i
+          inH = True
+        elif(inH == True):
+          maxH0 = i
+          inH = False
+          if(maxH0 - minH0 > maxLen):
+            maxLen = maxH0-minH0
+            minH = minH0/100
+            maxH = maxH0/100
+      self.img = np.clip((self.img - minH)/(maxH-minH), 0.0, 1.0)
 
   def __Cut(self, thre):
     cutL = 0
@@ -87,8 +99,26 @@ class vertexCloudImg:
       arr = arr[2:]
       self.img[i] = arr[1::3]
 
+  # def __diff(self,upThre=0,downThre=0):
+  #   wd = self.img.shape[1]
+  #   ht = self.img.shape[0]
+  #   posX = np.clip(np.arange(1, wd+1), 0, wd-1)
+  #   posY = np.clip(np.arange(0, ht), 0, ht-1)
+  #   posX, posY = np.meshgrid(posX, posY)
+  #   self.img -= self.img[posY,posX]
+  #   self.img = np.where(self.img >= upThre,self.img,
+  #     np.where(self.img <= downThre,self.img,0))
+
+  def __flatImg(self,radius:int):
+    self.img = self.img - np.average(self.img,0)      #使用扫描线均值消除曲率
+    blurImg = cv2.blur(self.img,(radius,radius),borderType=cv2.BORDER_REPLICATE)
+    self.img = self.img - blurImg        #使用均值模糊估计高度消除曲率
 
 if __name__ == "__main__":
   vcImg = vertexCloudImg("data/1_1.csv")
-  #高动态范围贴图
-  cv2.imwrite("data/1_1.exr", vcImg.img)
+  # pyplot.cla()
+  # pyplot.imshow(vcImg.img)
+  # pyplot.colorbar()
+  # pyplot.show()
+  # 导出贴图
+  cv2.imwrite("data/1_1.png", vcImg.img)
