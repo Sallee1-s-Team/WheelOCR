@@ -1,4 +1,5 @@
 import cv2
+import re
 import numpy as np
 import torch
 from matplotlib import pyplot
@@ -7,7 +8,7 @@ from matplotlib import pyplot
 import os,sys
 os.chdir(sys.path[0])
 
-class vertexCloudImg:
+class verCloud2Img:
   def __init__(self, path: str) -> None:
     self.path = path
     self.img: np.ndarray
@@ -16,15 +17,16 @@ class vertexCloudImg:
     while(np.count_nonzero(self.img) != np.size(self.img)):
       self.__fullHole(2)        # 使用加权均值模糊反复填洞，直到洞被填满
     self.__flatImg(100)         # 使用扫描线均值消除曲率
-    self.__normalizeImg(100000)
+    self.__normalizeImg(1e5)
     # 转换为SDR图像
-    #self.img = self.img ** 3   #伽马值调整
     self.img = (self.img * 255).astype("uint8")
-    self.img = np.repeat(self.img[:,:,np.newaxis],3,2)
     # 滤波
+    self.img = np.repeat(self.img[:,:,np.newaxis],3,2)
     self.img = cv2.pyrMeanShiftFiltering(self.img,10,10)
     # 直方图均衡化
     self.img = cv2.equalizeHist(self.img[:,:,0])
+    # 直方图剪裁
+    self.__clipHist(0.5)
     
 
   def __normalizeImg(self, thre: int):
@@ -99,26 +101,38 @@ class vertexCloudImg:
       arr = arr[2:]
       self.img[i] = arr[1::3]
 
-  # def __diff(self,upThre=0,downThre=0):
-  #   wd = self.img.shape[1]
-  #   ht = self.img.shape[0]
-  #   posX = np.clip(np.arange(1, wd+1), 0, wd-1)
-  #   posY = np.clip(np.arange(0, ht), 0, ht-1)
-  #   posX, posY = np.meshgrid(posX, posY)
-  #   self.img -= self.img[posY,posX]
-  #   self.img = np.where(self.img >= upThre,self.img,
-  #     np.where(self.img <= downThre,self.img,0))
-
   def __flatImg(self,radius:int):
     self.img = self.img - np.average(self.img,0)      #使用扫描线均值消除曲率
     blurImg = cv2.blur(self.img,(radius,radius),borderType=cv2.BORDER_REPLICATE)
     self.img = self.img - blurImg        #使用均值模糊估计高度消除曲率
 
+  def __clipHist(self,thre:float):
+    hist = np.histogram(self.img, bins=np.arange(0, 256, 1, dtype="uint8"))
+    clipPoint = 0
+    sumPix = 0
+    for i in range(len(hist[0])):
+      sumPix += hist[0][i]
+      if (sumPix >= thre * self.img.shape[0]*self.img.shape[1]):
+        clipPoint = i
+        break
+
+    self.img = (np.clip(((self.img.astype("float32") - clipPoint)/(255-clipPoint)),0,1)*255).astype("uint8")
+
+# End of class "vetCloud2Img"
+
+def getFileList(root:str,REpattern:str):
+  files = os.listdir(root)
+  csvPattern = re.compile(REpattern)
+  csvfiles = []
+  for file in files:
+    if(re.search(csvPattern,file) != None):
+      csvfiles.append(file)
+  return csvfiles
+
 if __name__ == "__main__":
-  vcImg = vertexCloudImg("data/1_1.csv")
-  # pyplot.cla()
-  # pyplot.imshow(vcImg.img)
-  # pyplot.colorbar()
-  # pyplot.show()
-  # 导出贴图
-  cv2.imwrite("data/1_1.png", vcImg.img)
+  csvFileLists = getFileList("data",r".+\.csv$")
+  for csvFile in csvFileLists:
+    vcImg = verCloud2Img(f"data/{csvFile}")
+    #导出贴图
+    cv2.imwrite(f"OutputImgs/full/{csvFile[:-3]}png", vcImg.img)
+
