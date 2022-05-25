@@ -31,7 +31,7 @@ class verCloud2Img:
 
   def __normalizeImg(self, thre: int):
     #移除无效点后规格化到0~1
-    self.img = np.where(self.img == 0, np.nan, self.img)
+    #self.img = np.where(self.img == 0, np.nan, self.img)
     minH = np.nanmin(self.img)
     maxH = np.nanmax(self.img)
     self.img = np.nan_to_num(self.img)
@@ -122,12 +122,12 @@ class verCloud2Img:
 
 def getFileList(root:str,REpattern:str):
   files = os.listdir(root)
-  csvPattern = re.compile(REpattern)
-  csvfiles = []
+  Pattern = re.compile(REpattern)
+  Filterfiles = []
   for file in files:
-    if(re.search(csvPattern,file) != None):
-      csvfiles.append(file)
-  return csvfiles
+    if(re.search(Pattern,file) != None):
+      Filterfiles.append(file)
+  return files
 
 if __name__ == "__main__":
   csvFileLists = getFileList("data",r".+\.csv$")
@@ -135,4 +135,4 @@ if __name__ == "__main__":
     vcImg = verCloud2Img(f"data/{csvFile}")
     #导出贴图
     cv2.imwrite(f"OutputImgs/full/{csvFile[:-3]}png", vcImg.img)
-
+    print(f"output:OutputImgs/full/{csvFile[:-3]}png")

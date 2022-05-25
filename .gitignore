@@ -2,3 +2,8 @@
 /轮胎胎侧字符识别
 /__pycache__
 /OutputImgs
+Train/data
+Verify/data
+Test/data
+Test/tiles
+Temp/
