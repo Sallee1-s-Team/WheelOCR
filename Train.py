@@ -9,19 +9,19 @@ from Loader import *
 
 if __name__ == '__main__':
   #参数
-  learn_rate = 1e-5   #学习率
-  miniBatch = 100   #批大小
-  miniBatchCount = 5  #梯度累加次数
+  learn_rate = 1e-4   #学习率
+  miniBatch = 300   #批大小
+  miniBatchCount = 1  #梯度累加次数
 
   #部署GPU
   device = torch.device("cuda")
   #数据
-  trainSet = CharDataSet("Train",prePorcess=False)      #如果做过预处理将prePorcess设置为False
+  VerifySet = CharDataSet("Train",prePorcess=False)      #如果做过预处理将prePorcess设置为False
   verifySet = CharDataSet("Verify",prePorcess=False)    #如果做过预处理将prePorcess设置为False
-  trainLoader= DataLoader(trainSet,miniBatch,shuffle=True,num_workers=0,drop_last=True)
+  trainLoader= DataLoader(VerifySet,miniBatch,shuffle=True,num_workers=0,drop_last=True)
   verifyLoader = DataLoader(verifySet,miniBatch,shuffle=False)
 
-  trainLen = len(trainSet)
+  trainLen = len(VerifySet)
   verifyLen = len(verifySet)
 
   #模型
@@ -131,7 +131,6 @@ if __name__ == '__main__':
         result = torch.argmax(outputs,1)            #取最大值
         rightCount += torch.sum(result==targets)    #和标签比较
         loss = lossFn(outputs,targets)              #代价函数
-        logWriter.add_images("Test data",imgs,train_step)
         totalLoss+=loss
         batchi += 1
         print(f"\r测试中，进度{(batchi / batchCount)*100:.2f}%",flush=True,end="")

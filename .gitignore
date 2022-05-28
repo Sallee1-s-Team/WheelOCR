@@ -7,3 +7,10 @@ Verify/data
 Test/data
 Test/tiles
 Temp/
+Model[s]/
+Log[s]/
+WrongMat.csv
+TrainLogs
+TestLogs
+Logs
+混淆矩阵

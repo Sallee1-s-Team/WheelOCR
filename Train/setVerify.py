@@ -40,6 +40,8 @@ trainFile.close()
 verifyFile.close()
 
 #移动文件
+shutil.rmtree("../Verify/data",ignore_errors=True)
+os.mkdir("../Verify/data")
 with open("../Verify/data.csv","r",encoding="utf8") as testFp:
   testReader = csv.reader(testFp)
   next(testReader)

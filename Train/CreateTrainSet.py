@@ -1,6 +1,7 @@
 import csv
 from PIL import Image, ImageDraw, ImageFont
 import matplotlib.pyplot as plt
+import skimage.morphology as mp
 import numpy as np
 import os
 import cv2
@@ -36,16 +37,39 @@ class CreateTrainChar:
     def getRd(base:float,range:float):    #基于0的随机数
       return base + (random() * 2 - 1)*range
     wd = img.shape[1]; ht = img.shape[0]
-    #透视变换矩阵
+    #透视变换
     s = 8
     perspMat = cv2.getPerspectiveTransform(np.asarray([[0,0],[0,wd],[ht,0],[ht,wd]],dtype="float32"),
       np.asarray([[getRd(0,s),getRd(0,s)],[getRd(0,s),getRd(wd,s)],[getRd(ht,s),getRd(0,s)],[getRd(ht,s),getRd(wd,s)]],dtype="float32"))
     img = cv2.warpPerspective(img,perspMat,(wd,ht),borderMode=cv2.BORDER_CONSTANT,borderValue=0)
-    # img = cv2.normalize(img,None,randint(0,100),randint(155,255),cv2.NORM_MINMAX)       #随机亮度
-    # size = randint(1,3)*2+1
-    # img = cv2.GaussianBlur(img,ksize=(size,size),sigmaX=0)               #随机高斯模糊
-    # img = (img + np.random.normal(loc=0,scale=random()*32,size=img.shape))    #随机高斯噪声
-    img = np.clip(img,0,255).astype("uint8")
+    
+    #随机膨胀/腐蚀
+    trick = randint(-1,2)
+    if(trick > 0):
+      img = mp.dilation(img,mp.disk(trick))
+    elif(trick < 0):
+      img = mp.erosion(img,mp.disk(-trick))
+    
+    #二值&细线化防止字符消失
+    skimg = cv2.threshold(img,0,255,cv2.THRESH_BINARY+cv2.THRESH_OTSU)[1]
+    skimg = skimg == 255
+    skimg = mp.skeletonize(skimg)
+    skimg = skimg.astype(np.uint8) * 255
+
+    img = np.where(skimg == 255,255,img)
+
+    size = randint(0,3) * 2 + 1
+    if(size != 1):
+      img = cv2.GaussianBlur(img,ksize=(size,size),sigmaX=0)               #随机高斯模糊
+
+    #添加噪点
+    noiseImg = np.random.randint(-32,32,(ht,wd),dtype="int")
+
+    img = np.clip(noiseImg+img,0,255).astype("uint8")
+
+    
+    size = randint(16,64)
+    img = cv2.resize(img,(size,size)) #随机缩放
     return img
 
   def writeCsv(self):
