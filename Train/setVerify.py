@@ -29,8 +29,8 @@ for row in soruceReader:
 
 #从字符中任选50个作为测试集
 for ch in samples.values():
-  verifyIdxs = np.random.choice(np.arange(0,300,dtype=int),50,replace=False)
-  for i in range(0,300):
+  verifyIdxs = np.random.choice(np.arange(0,500,dtype=int),100,replace=False)
+  for i in range(0,500):
     if i in verifyIdxs:
       verifyWriter.writerow(ch[i])
     else:

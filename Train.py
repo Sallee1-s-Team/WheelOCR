@@ -10,8 +10,8 @@ from Loader import *
 if __name__ == '__main__':
   #参数
   learn_rate = 1e-4   #学习率
-  miniBatch = 300   #批大小
-  miniBatchCount = 1  #梯度累加次数
+  miniBatch = 100   #批大小
+  miniBatchCount = 5  #梯度累加次数
 
   #部署GPU
   device = torch.device("cuda")

@@ -53,11 +53,10 @@ class TestDataSet(Dataset):
 
   def __imgPreprocess(self,img):
     img = cv2.medianBlur(img,3)   #中值滤波
-    img = mp.opening(img)
+    #img = mp.opening(img)
     img = cv2.normalize(img,None,0,255,cv2.NORM_MINMAX)
     img = cv2.threshold(img,0,255,cv2.THRESH_TOZERO+cv2.THRESH_OTSU)[1]
     img = self.__imgCut(img)      #图像裁切
-
     img = cv2.resize(img,(56,56),interpolation=cv2.INTER_LINEAR) #缩放
     zeroImg = np.zeros((64,64),dtype="uint8"); zeroImg[4:-4,4:-4] = img
     img = zeroImg    #填充图像
@@ -65,24 +64,39 @@ class TestDataSet(Dataset):
 
   def __imgCut(self,img):
     nanImg = np.where(img == 0,np.nan,img)
-    t = np.nanmin(nanImg)
+    t = np.nanmin(nanImg);del(nanImg)
+
+    minLen = min(img.shape[0],img.shape[1])
+    openCrSz = max(minLen // 24,1)
+    closCrSz = max(minLen // 12,1)
+
+    referImg = cv2.copyMakeBorder(img,openCrSz,openCrSz,openCrSz,openCrSz,cv2.BORDER_CONSTANT,value=0)
+    referImg = cv2.threshold(referImg,t,255,cv2.THRESH_BINARY+cv2.THRESH_OTSU)[1]
+    referImg = referImg == 255
+
+    referImg = mp.binary_opening(referImg,mp.square(openCrSz))    #使用开运算的图像作为裁剪参考
+    referImg = mp.binary_closing(referImg,mp.square(closCrSz))    #闭运算连接笔画
+    referImg = mp.remove_small_objects(referImg,min_size=int(referImg.size * 0.05))
+    referImg = referImg[openCrSz:-openCrSz,openCrSz:-openCrSz]    #去除填充的部分
+    referImg = (referImg * 255).astype("uint8")
+
     # 矩形框裁剪
     edge = [0, 0, 0, 0]
-    for i in range(0, img.shape[0]):
-      if (img[i].max() > t):
+    for i in range(0, referImg.shape[0]):
+      if (referImg[i].max() > t):
         edge[0] = max(0, i)
         break
-    for i in range(img.shape[0] - 1, -1, -1):
-      if (img[i].max() > t):
-        edge[1] = min(img.shape[0], i + 1)
+    for i in range(referImg.shape[0] - 1, -1, -1):
+      if (referImg[i].max() > t):
+        edge[1] = min(referImg.shape[0], i + 1)
         break
-    for i in range(0, img.shape[1]):
-      if (img[:, i].max() > t):
+    for i in range(0, referImg.shape[1]):
+      if (referImg[:, i].max() > t):
         edge[2] = max(0, i)
         break
-    for i in range(img.shape[1] - 1, -1, -1):
-      if (img[:, i].max() > t):
-        edge[3] = min(img.shape[1], i + 1)
+    for i in range(referImg.shape[1] - 1, -1, -1):
+      if (referImg[:, i].max() > t):
+        edge[3] = min(referImg.shape[1], i + 1)
         break
 
     #判断裁切框尺寸，小于16x16需要钳制到对应范围
@@ -135,7 +149,6 @@ class TestDataSet(Dataset):
     #裁切
     img = img[edge[0]:edge[1],edge[2]:edge[3]]
     return img
-
 
   def __getitem__(self, index):
     img = cv2.imread(f"Temp/{self.FileList[index][0]}",flags=cv2.IMREAD_GRAYSCALE)
@@ -279,5 +292,6 @@ class CharDataSet(Dataset):
 
 if __name__ == '__main__':
   #预处理
-  trainSet = CharDataSet("Train")
-  VerifySet = CharDataSet("Verify")
+  # trainSet = CharDataSet("Train")
+  # verifySet = CharDataSet("Verify")
+  trainSet = TestDataSet("Test")
