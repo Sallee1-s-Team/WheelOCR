@@ -1,13 +1,16 @@
-from copy import deepcopy
 import random
 import re
+from copy import deepcopy
+
 import torch
 import torchvision
+from matplotlib import pyplot
+from torch import nn
 from torch.utils.data.dataloader import DataLoader
 from torch.utils.tensorboard import SummaryWriter
-from torch import nn
+
 from Loader import *
-from matplotlib import pyplot
+
 
 def outWrongMatCsv(WrongMat:np.ndarray,label:dict):
   label = [chr(a) for a in label.values()]
@@ -23,7 +26,7 @@ def charTest():
   #参数
   miniBatch = 100   #批大小
   #部署GPU
-  device = torch.device("cuda")
+  device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
   #数据
   #testSet = CharDataSet("Verify",prePorcess=False)
   testSet = TestDataSet("Test",prePorcess=False)
@@ -34,7 +37,13 @@ def charTest():
   #myModel = MnistModel()
   myModel = torchvision.models.vgg16()
   myModel.classifier[6] = nn.Linear(4096,71)
-  print(myModel)
+  #将模型中的ReLU换成mish
+  # for i in range(len(myModel.features)):
+  #   if isinstance(myModel.features[i],nn.ReLU):
+  #     myModel.features[i] = nn.Mish(inplace=True)
+  # for i in range(len(myModel.classifier)):
+  #   if isinstance(myModel.classifier[i],nn.ReLU):
+  #     myModel.classifier[i] = nn.Mish(inplace=True)
   myModel.load_state_dict(torch.load("Models/3rd.pth"))
   myModel.train(False)
   myModel = myModel.to(device)
@@ -140,7 +149,15 @@ def sentenceTest():
   #模型
   myModel = torchvision.models.vgg16()
   myModel.classifier[6] = nn.Linear(4096,71)
-  myModel.load_state_dict(torch.load("Models/3rd.pth"))
+  myModel.load_state_dict(torch.load("Models/mish.pth"))
+  #将模型中的ReLU换成mish
+  for i in range(len(myModel.features)):
+    if isinstance(myModel.features[i],nn.ReLU):
+      myModel.features[i] = nn.Mish(inplace=True)
+  for i in range(len(myModel.classifier)):
+    if isinstance(myModel.classifier[i],nn.ReLU):
+      myModel.classifier[i] = nn.Mish(inplace=True)
+
   myModel.train(False)
   myModel = myModel.to(device)
   
@@ -149,12 +166,9 @@ def sentenceTest():
   lossFn = lossFn.to(device)
 
   #评估指标
-  testLoss = 0
   rightCount = 0
 
   #错误图
-  testLoss = 0     #总损失
-  AvgLoss = 0       #平均损失
   rightRate = 0     #正确率
   rightCount = 0
   totalCount = 0
@@ -248,4 +262,5 @@ def sentenceTest():
   print(f"正确率：{rightRate:.2f}%({rightCount}/{totalCount})")
 
 if __name__ == '__main__':
-  sentenceTest()
+  #sentenceTest()
+  charTest()

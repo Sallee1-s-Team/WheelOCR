@@ -1,6 +1,6 @@
 /data
 /轮胎胎侧字符识别
-/__pycache__
+__pycache__
 /OutputImgs
 Train/data
 Verify/data
@@ -10,8 +10,6 @@ Temp/
 Model[s]/
 Log[s]/
 WrongMat.csv
-TrainLogs
-TestLogs
-Logs
+*[Ll]og[s]*
 混淆矩阵
 修正.*

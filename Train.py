@@ -29,6 +29,14 @@ if __name__ == '__main__':
   # myModel.add_module("outLayer",nn.Linear(1024,71))
   myModel = torchvision.models.vgg16()
   myModel.classifier[6] = nn.Linear(4096,71)
+
+  #将模型中的ReLU换成mish
+  for i in range(len(myModel.features)):
+    if isinstance(myModel.features[i],nn.ReLU):
+      myModel.features[i] = nn.Mish(inplace=True)
+  for i in range(len(myModel.classifier)):
+    if isinstance(myModel.classifier[i],nn.ReLU):
+      myModel.classifier[i] = nn.Mish(inplace=True)
   print(myModel)
   myModel = myModel.to(device)
   

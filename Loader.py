@@ -40,7 +40,7 @@ class TestDataSet(Dataset):
         i+=1
         # print(f"\r预处理数据集\"{rootDir}\"中，进度{i / self.lenFileList * 100:.2f}%",flush=True,end="")
     
-
+  
   def __getDict(self,dictDir:str):
     dictMap = {}
     rDictMap = {}
@@ -278,7 +278,6 @@ class CharDataSet(Dataset):
     #裁切
     img = img[edge[0]:edge[1],edge[2]:edge[3]]
     return img
-
 
   def __getitem__(self, index):
     img = cv2.imread(f"Temp/{self.FileList[index][0]}",flags=cv2.IMREAD_GRAYSCALE)

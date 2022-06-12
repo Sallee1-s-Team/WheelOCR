@@ -111,7 +111,8 @@ class devideChar:
 
     #查找空格并单独写csv
     GapWd = res[1:,0] - res[:-1,1]
-    isSpace = (GapWd > 0.5 * avgWd)
+    avgGapWd = np.average(GapWd)
+    isSpace = (GapWd > 1.5 * avgGapWd)
     self.writeSpaceCsv(OutDir,isSpace)
     
     for i in range(len(res)):
