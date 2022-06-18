@@ -88,69 +88,19 @@ class verCloud2Img:
         imgCount += np.where(self.img[posY, posX] == 0, 0, 1)
     imgCount = np.where(imgCount == 0,1,imgCount)
     self.img = np.where(self.img == 0,imgSum/imgCount ,self.img)
+    self.img = self.img.astype("float32")
 
   def __loadImg(self, path: str):
-    csvFile = open(path)
-    s = csvFile.readline()  # 读掉表头
-    #读取csv到np矩阵
-    self.img = np.ndarray((8000, 2048), dtype=np.float32)
-    for i in range(0, 8000):
-      s = csvFile.readline()
-      arr = s.split(",")
-      arr = arr[2:]
-      self.img[i] = arr[1::3]
-
-  def __loadImg2(self,path:str):
-    csvFile = open(path)
-    s = csvFile.readline()  # 读掉表头
-    #读取csv中的点云信息
-    vertexCloud = []
-    for i in range(0, 8000):
-      s = csvFile.readline()
-      arr = s.split(",")
-      arr = arr[2:]
-      vertexCloud += [float(i) for i in arr]
-    vertexCloud = np.array(vertexCloud, dtype=np.float32)
-    vertexCloud = vertexCloud.reshape((8000, 2048, 3))
-
-    #确定csv的坐标范围，选定非零最值
-    vertexCloud[vertexCloud == 0] = np.nan
-    xMax = np.nanmax(vertexCloud[:,:,0])
-    xMin = np.nanmin(vertexCloud[:,:,0])
-    yMax = np.nanmax(vertexCloud[:,:,1])
-    yMin = np.nanmin(vertexCloud[:,:,1])
-    zMax = np.nanmax(vertexCloud[:,:,2])
-    zMin = np.nanmin(vertexCloud[:,:,2])
-    
-    #Z轴长度设为1，计算x轴比例
-    xScale = (xMax-xMin)/(zMax-zMin)
-
-    #将xz坐标轴规格化到0~8000,y坐标轴规格化到0~1
-    vertexCloud[:,:,2] = (vertexCloud[:,:,2]-zMin)/(zMax-zMin) * 8000
-    vertexCloud[:,:,0] = (vertexCloud[:,:,0]-xMin)/(xMax-xMin) * 8000 * xScale
-    vertexCloud[:,:,1] = (vertexCloud[:,:,1]-yMin)/(yMax-yMin)
-    vertexCloud = np.nan_to_num(vertexCloud)
-
-    #填充像素矩阵
-    wd = 8000
-    ht = int(xScale * 8000)
-    img = np.zeros((ht, wd), dtype=np.float32)
-
-
-    i = [0]
-    def setPixel(x:float,y:float,L:float):
-      x,y = int(x),int(y)
-      x,y = np.clip(x,0,wd-1),np.clip(y,0,ht-1)
-      if(img[y,x] != 0.0):img[y,x] = (img[y,x] + L) / 2
-      else:img[y,x] = L
-      i[0] += 1
-      print(f"\r当前进度：{i[0]/(wd*ht)*100:.2f}%",end="")
-    
-    setPixel_vec = np.vectorize(setPixel)
-    setPixel_vec(vertexCloud[:,:,2],vertexCloud[:,:,0],vertexCloud[:,:,1])
-    
+    with open(path, "r") as csvFile:
+      s = csvFile.readline()  # 读掉表头
+      #读取csv到np矩阵
+      img = np.ndarray((8000, 2048), dtype=np.float32)
+      for i in range(0, 8000):
+        s = csvFile.readline()
+        arr = s.split(",")
+        arr = arr[2:]
+        img[i] = arr[1::3]
     return img
-
 
   def __flatImg(self,radius:int):
     self.img = self.img - np.average(self.img,0)      #使用扫描线均值消除曲率

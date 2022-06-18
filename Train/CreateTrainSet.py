@@ -45,6 +45,12 @@ class CreateTrainChar:
     perspMat = cv2.getPerspectiveTransform(np.asarray([[0,0],[0,wd],[ht,0],[ht,wd]],dtype="float32"),
       np.asarray([[getRd(0,s),getRd(0,s)],[getRd(0,s),getRd(wd,s)],[getRd(ht,s),getRd(0,s)],[getRd(ht,s),getRd(wd,s)]],dtype="float32"))
     img = cv2.warpPerspective(img,perspMat,(wd,ht),borderMode=cv2.BORDER_CONSTANT,borderValue=0)
+
+    #细线化防止字符过度腐蚀消失
+    skimg = cv2.threshold(img,0,255,cv2.THRESH_BINARY+cv2.THRESH_OTSU)[1]
+    skimg = skimg == 255
+    skimg = mp.skeletonize(skimg)
+    skimg = skimg.astype(np.uint8) * 255
     
     #随机膨胀/腐蚀
     trick = randint(-1,2)
@@ -53,34 +59,29 @@ class CreateTrainChar:
     elif(trick < 0):
       img = mp.erosion(img,mp.disk(-trick))
 
+    img = np.where(skimg == 255,255,img)
+
     #以一定的概率提取边缘构造空心字
     if(random() > 0.5):
       img = cv2.Canny(img,100,200)
       img = mp.dilation(img,mp.disk(randint(0,2)))
 
-    #二值&细线化防止字符消失
-    skimg = cv2.threshold(img,0,255,cv2.THRESH_BINARY+cv2.THRESH_OTSU)[1]
-    skimg = skimg == 255
-    skimg = mp.skeletonize(skimg)
-    skimg = skimg.astype(np.uint8) * 255
-
-    img = np.where(skimg == 255,255,img)
-
     size = randint(0,3) * 2 + 1
     if(size != 1):
       img = cv2.GaussianBlur(img,ksize=(size,size),sigmaX=0)               #随机高斯模糊
     
+    size = randint(16,64)
+    img = cv2.resize(img,(size,size)) #随机缩放
+
     #随机重映射白字
     img = cv2.normalize(img,None,0,randint(200,255),cv2.NORM_MINMAX)
 
+    wd,ht = img.shape
     #添加噪点
     noiseImg = np.random.randint(-64,64,(ht,wd),dtype="int")
-    img = np.clip(noiseImg+img,0,255).astype("uint8")
+    img = np.clip(noiseImg*random()+img,0,255).astype("uint8")
     
-    size = randint(16,64)
-    img = cv2.resize(img,(size,size)) #随机缩放
     return img
-
 
   def writeCsv(self):
     #文件名转csv数据

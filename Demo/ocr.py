@@ -14,7 +14,7 @@ from torch import nn
 class ocr:
   # 如果需要打包成单独的程序，则需要手动提供模型路径
   # 以下代码摘自test/devideImg.py,Loader.py,Test.py
-  def __init__(self,modelPath="../Models/3rd.pth") -> None:
+  def __init__(self,modelPath="../Models/mish.pth") -> None:
     # 查找表
     self.charDict,self.rCharDict = self.__getDict("dictionary.txt")
 
@@ -22,6 +22,13 @@ class ocr:
     self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     self.myModel = torchvision.models.vgg16()
     self.myModel.classifier[6] = nn.Linear(4096,71)
+    #mish版vgg16需要修改的部分
+    for i in range(len(self.myModel.features)):
+      if isinstance(self.myModel.features[i],nn.ReLU):
+        self.myModel.features[i] = nn.Mish(inplace=True)
+    for i in range(len(self.myModel.classifier)):
+      if isinstance(self.myModel.classifier[i],nn.ReLU):
+        self.myModel.classifier[i] = nn.Mish(inplace=True)
     self.myModel.load_state_dict(torch.load(modelPath))
     self.myModel = self.myModel.to(self.device)
     self.myModel.train(False)
