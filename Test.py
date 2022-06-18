@@ -3,6 +3,7 @@ import re
 from copy import deepcopy
 
 import torch
+from myModel import MyModel
 import torchvision
 from matplotlib import pyplot
 from torch import nn
@@ -22,21 +23,24 @@ def outWrongMatCsv(WrongMat:np.ndarray,label:dict):
     for i in range(len(label)):
       writer.writerow([label[i]]+WrongMat[i].tolist())
 
-def charTest():
+def charTest(setName = "Test"):
   #参数
   miniBatch = 100   #批大小
   #部署GPU
   device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
   #数据
-  #testSet = CharDataSet("Verify",prePorcess=False)
-  testSet = TestDataSet("Test",prePorcess=False)
+  if(setName == "Test"):
+    testSet = TestDataSet("Test",prePorcess=False)
+  else:
+    testSet = CharDataSet(setName,prePorcess=False)
   testLoader = DataLoader(testSet,miniBatch,shuffle=False,drop_last=False)
   testLen = len(testSet)
 
   #模型
-  #myModel = MnistModel()
-  myModel = torchvision.models.vgg16()
-  myModel.classifier[6] = nn.Linear(4096,71)
+  myModel = MyModel()
+  myModel.classifier[-1] = nn.Linear(256,71)
+  # myModel = torchvision.models.vgg16()
+  # myModel.classifier[6] = nn.Linear(4096,71)
   #将模型中的ReLU换成mish
   # for i in range(len(myModel.features)):
   #   if isinstance(myModel.features[i],nn.ReLU):
@@ -44,7 +48,7 @@ def charTest():
   # for i in range(len(myModel.classifier)):
   #   if isinstance(myModel.classifier[i],nn.ReLU):
   #     myModel.classifier[i] = nn.Mish(inplace=True)
-  myModel.load_state_dict(torch.load("Models/3rd.pth"))
+  myModel.load_state_dict(torch.load("Models/myModel.pth"))
   myModel.train(False)
   myModel = myModel.to(device)
   
@@ -60,6 +64,7 @@ def charTest():
   wrongImgs = [[]for i in range(71)]
   shutil.rmtree("TestLogs",ignore_errors=True)
   logWriter = SummaryWriter("TestLogs")
+  wrongResult = [[]for i in range(71)]
 
   #错误矩阵
   wrongMat = np.zeros((71,71),dtype="uint8")
@@ -68,6 +73,15 @@ def charTest():
   AvgLoss = 0       #平均损失
   rightRate = 0     #正确率
   rightCount = 0
+
+  #计算精确率和召回率的数组
+  testLen = len(testSet)
+  TP = [0]*71
+  FP = [0]*71
+  FN = [0]*71
+  TN = [0]*71
+
+
   with torch.no_grad():
     batchCount = testLen // miniBatch + 1
     batchi = 0        #用来输出测试进度
@@ -83,21 +97,48 @@ def charTest():
       for i in range(len(result)):
         if result[i] != targets[i]:
           wrongImgs[result[i]].append(imgs[i].cpu().numpy().tolist())
+          wrongResult[result[i]].append(targets[i].item())
         wrongMat[targets[i]][result[i]] += 1
 
       loss = lossFn(outputs,targets)              #代价函数
       testLoss+=loss
       batchi += 1
       print(f"\r测试中，进度{(batchi / batchCount)*100:.2f}%",flush=True,end="")
+
+      #统计TP/FP/FN/TN
+      for i in range(len(targets)):
+        if(result[i]==targets[i]):
+          TP[targets[i]]+=1
+        else:
+          FP[result[i]]+=1
+          FN[targets[i]]+=1
     print()
     rightRate = rightCount/testLen*100
     AvgLoss = testLoss/(testLen/miniBatch)
-  print(f"验证损失:{AvgLoss:.3f}，正确率：{rightRate:.2f}%")
 
+    TP = np.array(TP)
+    FP = np.array(FP)
+    FN = np.array(FN)
+    TN = np.array(TN)
+    TN = testLen-TP-FP-FN
+
+    #计算正确率，精确率，召回率，F1分数
+    rightRate = rightCount/testLen
+    accRate = (TP / (TP+FP))
+    recallRate = (TP / (TP+FN))
+    F1Score = (2*accRate*recallRate)/(accRate+recallRate)
+
+  #控制台输出测试结果
+  print(f"测试损失:{AvgLoss:.3f},总正确率:{rightRate*100:.3f}%")
+  print(f"平均精确率：{np.nanmean(accRate)*100:.2f}%，最大精确率：{np.nanmax(accRate)*100:.2f}%,最小精确率：{np.nanmin(accRate)*100:.2f}%")
+  print(f"平均召回率：{np.nanmean(recallRate)*100:.2f}%，最大召回率：{np.nanmax(recallRate)*100:.2f}%,最小召回率：{np.nanmin(recallRate)*100:.2f}%")
+  print(f"平均F1分数：{np.nanmean(F1Score):.4f}，最大F1分数：{np.nanmax(F1Score):.4f},最小F1分数：{np.nanmin(F1Score):.4f}")
+
+  #写入tensorboard
   for i in range(len(wrongImgs)):
     imgs = torch.from_numpy(np.asarray(wrongImgs[i])).type(torch.uint8)
     if(len(imgs)!=0):
-      logWriter.add_images(f"target:{chr(testSet.rCharDict[i])}",imgs)
+      logWriter.add_images(f"result:{chr(testSet.rCharDict[i])},target:{[chr(testSet.rCharDict[item]) for item in wrongResult[i]]}",imgs)
 
   logWriter.close()
   outWrongMatCsv(wrongMat,testSet.rCharDict)
@@ -138,7 +179,10 @@ class sentenceLoader(TestDataSet):    #重写TestDataSet使其支持读取句子
     imgs = torch.from_numpy(np.asarray(imgs)).type(torch.float)
     targets = [self.charDict[ord(c)] for c in targets]
     targets = torch.from_numpy(np.asarray(targets)).type(torch.int)
-    return imgs,targets  
+    return imgs,targets
+  
+  def __len__(self):
+    return self.lenFileList
 
 def sentenceTest():
   #部署GPU
@@ -147,17 +191,18 @@ def sentenceTest():
   testSet = sentenceLoader("Test",prePorcess=False)
 
   #模型
-  myModel = torchvision.models.vgg16()
-  myModel.classifier[6] = nn.Linear(4096,71)
-  myModel.load_state_dict(torch.load("Models/mish.pth"))
+  myModel = MyModel()
+  myModel.classifier[-1] = nn.Linear(256,71)
+  # myModel = torchvision.models.vgg16()
+  # myModel.classifier[6] = nn.Linear(4096,71)
   #将模型中的ReLU换成mish
-  for i in range(len(myModel.features)):
-    if isinstance(myModel.features[i],nn.ReLU):
-      myModel.features[i] = nn.Mish(inplace=True)
-  for i in range(len(myModel.classifier)):
-    if isinstance(myModel.classifier[i],nn.ReLU):
-      myModel.classifier[i] = nn.Mish(inplace=True)
-
+  # for i in range(len(myModel.features)):
+  #   if isinstance(myModel.features[i],nn.ReLU):
+  #     myModel.features[i] = nn.Mish(inplace=True)
+  # for i in range(len(myModel.classifier)):
+  #   if isinstance(myModel.classifier[i],nn.ReLU):
+  #     myModel.classifier[i] = nn.Mish(inplace=True)
+  myModel.load_state_dict(torch.load("Models/myModel.pth"))
   myModel.train(False)
   myModel = myModel.to(device)
   
@@ -169,6 +214,12 @@ def sentenceTest():
   rightCount = 0
 
   #错误图
+  wrongImgs = [[]for i in range(71)]
+  shutil.rmtree("TestLogs",ignore_errors=True)
+  logWriter = SummaryWriter("TestLogs")
+  wrongResult = [[]for i in range(71)]
+
+  #正确率
   rightRate = 0     #正确率
   rightCount = 0
   totalCount = 0
@@ -237,9 +288,17 @@ def sentenceTest():
       resStr = resStr.replace(t,terms[t])
     result = list(resStr)
     return result
+  
+
+  #计算精确率和召回率的数组
+  TP = [0]*71
+  FP = [0]*71
+  FN = [0]*71
+  TN = [0]*71
 
   with torch.no_grad():
-    for data in testSet:
+    for dataIdx in range(len(testSet)):
+      data = testSet[dataIdx]
       imgs,targets = data
       imgs = imgs.to(device)
       targets = targets.to(device)
@@ -253,14 +312,54 @@ def sentenceTest():
       result = fixResult(result, resultCf[0])  #修正结果
 
       #统计正确数量
+      result = [testSet.charDict[ord(item)]for item in result]
+      targets = [testSet.charDict[ord(item)]for item in targets]
+      
       result = np.array(result)
       targets = np.array(targets)
       rightCount += np.sum(result == targets)
       totalCount += len(result)
-      
-  rightRate = (rightCount / totalCount) * 100
-  print(f"正确率：{rightRate:.2f}%({rightCount}/{totalCount})")
+
+      #写入错误图片
+      for i in range(len(result)):
+        if result[i] != targets[i]:
+          wrongImgs[result[i]].append(imgs[i].cpu().numpy().tolist())
+          wrongResult[result[i]].append(targets[i])
+
+      #统计TP/FP/FN/TN
+      for i in range(len(targets)):
+        if(result[i]==targets[i]):
+          TP[targets[i]]+=1
+        else:
+          FP[result[i]]+=1
+          FN[targets[i]]+=1
+
+    testLen = totalCount
+    TP = np.array(TP)
+    FP = np.array(FP)
+    FN = np.array(FN)
+    TN = np.array(TN)
+    TN = testLen-TP-FP-FN
+
+    #计算正确率，精确率，召回率，F1分数
+    rightRate = rightCount/testLen
+    accRate = (TP / (TP+FP))
+    recallRate = (TP / (TP+FN))
+    F1Score = (2*accRate*recallRate)/(accRate+recallRate)
+
+  #控制台输出测试结果
+  print(f"总正确率:{rightRate*100:.3f}%")
+  print(f"平均精确率：{np.nanmean(accRate)*100:.2f}%，最大精确率：{np.nanmax(accRate)*100:.2f}%,最小精确率：{np.nanmin(accRate)*100:.2f}%")
+  print(f"平均召回率：{np.nanmean(recallRate)*100:.2f}%，最大召回率：{np.nanmax(recallRate)*100:.2f}%,最小召回率：{np.nanmin(recallRate)*100:.2f}%")
+  print(f"平均F1分数：{np.nanmean(F1Score):.4f}，最大F1分数：{np.nanmax(F1Score):.4f},最小F1分数：{np.nanmin(F1Score):.4f}")
+
+  #写入tensorboard
+  for i in range(len(wrongImgs)):
+    imgs = torch.from_numpy(np.asarray(wrongImgs[i])).type(torch.uint8)
+    if(len(imgs)!=0):
+      logWriter.add_images(f"result:{chr(testSet.rCharDict[i])},target:{[chr(testSet.rCharDict[item]) for item in wrongResult[i]]}",imgs)
+
 
 if __name__ == '__main__':
-  #sentenceTest()
   charTest()
+  sentenceTest()
